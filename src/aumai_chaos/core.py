@@ -7,7 +7,6 @@ import time
 
 from aumai_chaos.models import FaultConfig, FaultType
 
-
 # ---------------------------------------------------------------------------
 # Custom exceptions
 # ---------------------------------------------------------------------------
@@ -77,18 +76,34 @@ class FaultInjector:
 
         Respects *config.probability* — if the RNG decides not to fire,
         this method returns without raising or sleeping.
+
+        Args:
+            config: A validated :class:`~aumai_chaos.models.FaultConfig`.
+
+        Raises:
+            ValueError: If a fault-type-specific required parameter is absent.
+                For ``latency`` faults, ``duration_ms`` must be set.
+                For ``error`` faults, ``error_code`` must be set.
         """
         if not self.should_inject(config.probability):
             return
 
         if config.fault_type == FaultType.latency:
-            duration = config.duration_ms if config.duration_ms is not None else 500
-            self.inject_latency(duration)
+            if config.duration_ms is None:
+                raise ValueError(
+                    "FaultConfig with fault_type='latency' requires duration_ms "
+                    "to be set.  Received None."
+                )
+            self.inject_latency(config.duration_ms)
 
         elif config.fault_type == FaultType.error:
-            code = config.error_code if config.error_code is not None else 500
+            if config.error_code is None:
+                raise ValueError(
+                    "FaultConfig with fault_type='error' requires error_code "
+                    "to be set.  Received None."
+                )
             msg = config.error_message or "Injected error"
-            self.inject_error(code, msg)
+            self.inject_error(config.error_code, msg)
 
         elif config.fault_type == FaultType.timeout:
             self.inject_timeout()

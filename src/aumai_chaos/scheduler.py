@@ -33,7 +33,9 @@ class ExperimentScheduler:
         self._results: dict[str, ExperimentResult] = {}
         self._abort_flags: dict[str, threading.Event] = {}
         self._injector = FaultInjector()
-        self._observer = ExperimentObserver()
+        # Note: no shared _observer here — each run() creates its own
+        # ExperimentObserver instance so that concurrent runs are fully
+        # isolated.  See run() implementation below.
 
     # ------------------------------------------------------------------
     # Public API
@@ -73,7 +75,10 @@ class ExperimentScheduler:
         abort_flag = threading.Event()
         self._abort_flags[experiment_id] = abort_flag
 
-        self._observer.clear()
+        # Create a fresh, isolated observer for this run.  A shared observer
+        # would be cleared on each run() call, which corrupts observations for
+        # any concurrently executing experiment on the same scheduler instance.
+        observer = ExperimentObserver()
         start_time = datetime.now(tz=UTC)
 
         result = ExperimentResult(
@@ -83,7 +88,7 @@ class ExperimentScheduler:
         )
         self._results[experiment_id] = result
 
-        self._observer.observe(
+        observer.observe(
             "scheduler",
             "experiment_started",
             {"experiment_id": experiment_id, "name": experiment.name},
@@ -103,7 +108,7 @@ class ExperimentScheduler:
                 ):
                     try:
                         self._injector.inject(fault)
-                        self._observer.observe(
+                        observer.observe(
                             component,
                             f"{fault.fault_type.value}_injected",
                             {"probability": fault.probability},
@@ -112,7 +117,7 @@ class ExperimentScheduler:
                             fault_counts.get(fault.fault_type.value, 0) + 1
                         )
                     except Exception as exc:  # noqa: BLE001
-                        self._observer.observe(
+                        observer.observe(
                             component,
                             f"{fault.fault_type.value}_exception",
                             {"exception": str(exc)},
@@ -124,11 +129,12 @@ class ExperimentScheduler:
             time.sleep(1.0)
 
         end_time = datetime.now(tz=UTC)
-        final_status = (
-            ExperimentStatus.aborted if abort_flag.is_set() else ExperimentStatus.completed
-        )
+        if abort_flag.is_set():
+            final_status = ExperimentStatus.aborted
+        else:
+            final_status = ExperimentStatus.completed
 
-        self._observer.observe(
+        observer.observe(
             "scheduler",
             "experiment_ended",
             {"status": final_status.value},
@@ -146,7 +152,7 @@ class ExperimentScheduler:
             status=final_status,
             start_time=start_time,
             end_time=end_time,
-            observations=self._observer.get_observations(),
+            observations=observer.get_observations(),
             summary=summary,
         )
         self._results[experiment_id] = final_result

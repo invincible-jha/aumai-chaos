@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import threading
+from collections.abc import Generator
 from contextlib import contextmanager
 from datetime import UTC, datetime
-from typing import Generator
 
 from aumai_chaos.models import ObservationPoint
 
@@ -15,10 +16,17 @@ class ExperimentObserver:
     Designed to be thread-safe for use in concurrent experiments.  Each
     call to ``observe`` appends an :class:`ObservationPoint` with the
     current UTC timestamp.
+
+    Thread safety is achieved via an explicit :class:`threading.Lock` that
+    guards all mutations (``observe``, ``clear``) and snapshot reads
+    (``get_observations``).  This is a stronger guarantee than relying on
+    CPython's GIL, and correctly handles iteration-during-append scenarios
+    that would otherwise cause ``RuntimeError`` under free-threaded Python.
     """
 
     def __init__(self) -> None:
         self._observations: list[ObservationPoint] = []
+        self._lock: threading.Lock = threading.Lock()
 
     def observe(
         self,
@@ -39,15 +47,22 @@ class ExperimentObserver:
             event=event,
             details=details or {},
         )
-        self._observations.append(point)
+        with self._lock:
+            self._observations.append(point)
 
     def get_observations(self) -> list[ObservationPoint]:
-        """Return a shallow copy of all observations recorded so far."""
-        return list(self._observations)
+        """Return a shallow copy of all observations recorded so far.
+
+        The copy is taken under the lock to prevent a concurrent ``observe``
+        or ``clear`` from modifying the list during iteration.
+        """
+        with self._lock:
+            return list(self._observations)
 
     def clear(self) -> None:
         """Discard all recorded observations."""
-        self._observations.clear()
+        with self._lock:
+            self._observations.clear()
 
     @contextmanager
     def scope(

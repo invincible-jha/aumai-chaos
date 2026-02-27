@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import functools
-from typing import Any, Callable, TypeVar
+from collections.abc import Callable
+from typing import Any, TypeVar
 
 from aumai_chaos.core import FaultInjector
 from aumai_chaos.models import FaultConfig, FaultType
@@ -47,7 +48,7 @@ def chaos_monkey(
 
     def decorator(func: F) -> F:
         @functools.wraps(func)
-        def wrapper(*args: Any, **kwargs: Any) -> Any:
+        def wrapper(*args: Any, **kwargs: Any) -> Any:  # noqa: ANN401
             injector.inject(fault_config)
             return func(*args, **kwargs)
 
@@ -77,7 +78,7 @@ def resilience_test(
 
     def decorator(func: F) -> F:
         @functools.wraps(func)
-        def wrapper(*args: Any, **kwargs: Any) -> Any:
+        def wrapper(*args: Any, **kwargs: Any) -> Any:  # noqa: ANN401
             for fault in faults:
                 injector.inject(fault)
             return func(*args, **kwargs)

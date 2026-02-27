@@ -15,8 +15,7 @@ from aumai_chaos.models import (
     FaultConfig,
     FaultType,
 )
-from aumai_chaos.scheduler import ExperimentNotFoundError, ExperimentScheduler
-
+from aumai_chaos.scheduler import ExperimentScheduler
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -31,7 +30,10 @@ def _load_experiment(path: str) -> ChaosExperiment:
             import yaml  # type: ignore[import-untyped]
             data: dict[str, Any] = yaml.safe_load(raw)
         except ImportError:
-            click.echo("PyYAML required for YAML files. Install: pip install pyyaml", err=True)
+            click.echo(
+                "PyYAML required for YAML files. Install: pip install pyyaml",
+                err=True,
+            )
             sys.exit(1)
     else:
         data = json.loads(raw)
@@ -85,8 +87,9 @@ def run_command(experiment_path: str, json_output: bool) -> None:
 
     click.echo(f"\nStatus    : {result.status.value}")
     click.echo(f"Start     : {result.start_time.isoformat()}")
-    click.echo(f"End       : {result.end_time.isoformat() if result.end_time else 'n/a'}")
-    click.echo(f"Summary   :")
+    end_str = result.end_time.isoformat() if result.end_time else "n/a"
+    click.echo(f"End       : {end_str}")
+    click.echo("Summary   :")
     for key, value in result.summary.items():
         click.echo(f"  {key}: {value}")
     click.echo(f"Observations: {len(result.observations)} recorded")
@@ -100,10 +103,22 @@ def run_command(experiment_path: str, json_output: bool) -> None:
     type=click.Choice([f.value for f in FaultType], case_sensitive=False),
     help="Fault type to inject.",
 )
-@click.option("--duration", "duration_ms", default=500, show_default=True, help="Duration for latency faults (ms).")
-@click.option("--error-code", default=500, show_default=True, help="Error code for error faults.")
-@click.option("--message", default="Injected fault", show_default=True, help="Error message.")
-@click.option("--target", "target_component", default="*", show_default=True, help="Target component label.")
+@click.option(
+    "--duration", "duration_ms", default=500, show_default=True,
+    help="Duration for latency faults (ms).",
+)
+@click.option(
+    "--error-code", default=500, show_default=True,
+    help="Error code for error faults.",
+)
+@click.option(
+    "--message", default="Injected fault", show_default=True,
+    help="Error message.",
+)
+@click.option(
+    "--target", "target_component", default="*", show_default=True,
+    help="Target component label.",
+)
 def inject_command(
     fault_type_str: str,
     duration_ms: int,
@@ -132,7 +147,9 @@ def inject_command(
 
 
 @main.command("report")
-@click.option("--experiment-id", required=True, help="ID of the experiment to report on.")
+@click.option(
+    "--experiment-id", required=True, help="ID of the experiment to report on."
+)
 @click.option("--json-output", is_flag=True, help="Emit raw JSON.")
 def report_command(experiment_id: str, json_output: bool) -> None:
     """Display the results of a completed chaos experiment.
